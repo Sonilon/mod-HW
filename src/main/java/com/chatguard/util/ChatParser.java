@@ -7,48 +7,47 @@ import java.util.regex.*;
 public class ChatParser {
 
     /**
-     * Формат чата сервера:
-     * ? | «титул» NickName суффиксы: сообщение
-     * Примеры:
-     *   ? | «стажер» 1pirs Обменяю Ко мне!: test
-     *   ? | 1pirs: test
-     *   [VIP] 1pirs: test
+     * Форматы чата сервера:
+     *   [ALL] L | «стажер» NickName суффиксы: сообщение
+     *   G | «стажер» NickName суффиксы: сообщение
+     *   [ALL] L | NickName: сообщение
      *
-     * Ник — первое слово из [A-Za-z0-9_] длиной 2-16 символов,
-     * которое идёт после необязательных префиксов/титулов до двоеточия.
+     * Ник — первое слово из [A-Za-z0-9_] которое идёт:
+     *   1) сразу после закрывающей » (самый надёжный способ)
+     *   2) сразу после | если нет «»
+     *   3) в самом начале до двоеточия
      */
     public static String extractNick(String rawMessage) {
-        // Убираем цветовые коды Minecraft (§x или &x)
+        // Убираем ВСЕ цветовые коды (§x и §xx)
         String clean = rawMessage
                 .replaceAll("§[0-9a-fk-orA-FK-OR]", "")
                 .replaceAll("&[0-9a-fk-orA-FK-OR]", "")
                 .trim();
 
-        // Берём только часть до первого двоеточия
+        // Берём только часть ДО первого двоеточия
         int colonIdx = clean.indexOf(':');
         if (colonIdx < 0) return null;
-        String beforeColon = clean.substring(0, colonIdx);
+        String before = clean.substring(0, colonIdx);
 
-        // Убираем всё в угловых и квадратных скобках и «ёлочках»
-        // типа [L/G], «стажер», (что-то)
-        String stripped = beforeColon
-                .replaceAll("\\[[^\\]]*\\]", " ")   // [...]
-                .replaceAll("«[^»]*»", " ")          // «...»
-                .replaceAll("\\([^)]*\\)", " ")      // (...)
-                .replaceAll("[|?★✦✧♦◆●•]", " ")    // спецсимволы-разделители
-                .trim();
+        // Стратегия 1: после «...» — самый точный паттерн для этого сервера
+        // Пример: G | «стажер» NickName ...
+        Matcher m1 = Pattern.compile("»\\s*([A-Za-z0-9_]{2,16})").matcher(before);
+        if (m1.find()) return m1.group(1);
 
-        // Ищем первое слово которое выглядит как ник Minecraft
-        // Ник: только буквы, цифры, подчёркивание, 2-16 символов
-        Matcher m = Pattern.compile("(?<![\\w])([A-Za-z0-9_]{2,16})(?![\\w])").matcher(stripped);
-        while (m.find()) {
-            String candidate = m.group(1);
-            // Пропускаем слова которые явно не ники (короткие служебные)
-            if (candidate.length() < 2) continue;
-            return candidate;
-        }
+        // Стратегия 2: после | (пайпа)
+        // Пример: [ALL] L | NickName ...
+        Matcher m2 = Pattern.compile("\\|\\s*([A-Za-z0-9_]{2,16})").matcher(before);
+        if (m2.find()) return m2.group(1);
 
-        // Фолбэк: кастомный regex из конфига
+        // Стратегия 3: после последней ] скобки
+        Matcher m3 = Pattern.compile("\\]\\s*([A-Za-z0-9_]{2,16})").matcher(before);
+        if (m3.find()) return m3.group(1);
+
+        // Стратегия 4: первое валидное слово похожее на ник
+        Matcher m4 = Pattern.compile("(?:^|\\s)([A-Za-z0-9_]{3,16})(?:\\s|$)").matcher(before);
+        if (m4.find()) return m4.group(1);
+
+        // Стратегия 5: кастомный regex из конфига
         try {
             String customRegex = ChatGuardConfig.getInstance().nickRegex;
             if (customRegex != null && !customRegex.isEmpty()) {
@@ -61,18 +60,21 @@ public class ChatParser {
     }
 
     /**
-     * Проверяет сообщение на триггеры. Проверяем ВЕСЬ текст сообщения
-     * (после двоеточия), без учёта регистра.
+     * Ищет триггер ТОЛЬКО в тексте сообщения (после двоеточия).
      */
     public static ChatGuardConfig.Trigger findTrigger(String fullMessage) {
         if (fullMessage == null) return null;
 
-        // Берём текст после последнего двоеточия
-        String msgPart = fullMessage;
-        int colonIdx = fullMessage.lastIndexOf(':');
-        if (colonIdx >= 0 && colonIdx < fullMessage.length() - 1) {
-            msgPart = fullMessage.substring(colonIdx + 1);
-        }
+        // Убираем цветовые коды
+        String clean = fullMessage
+                .replaceAll("§[0-9a-fk-orA-FK-OR]", "")
+                .trim();
+
+        // Берём текст ПОСЛЕ первого двоеточия
+        int colonIdx = clean.indexOf(':');
+        String msgPart = colonIdx >= 0 && colonIdx < clean.length() - 1
+                ? clean.substring(colonIdx + 1).trim()
+                : clean;
 
         String lower = msgPart.toLowerCase();
         for (ChatGuardConfig.Trigger t : ChatGuardConfig.getInstance().triggers) {
@@ -82,13 +84,8 @@ public class ChatParser {
         return null;
     }
 
-    /**
-     * Извлекает текст сообщения (после первого двоеточия)
-     */
     public static String extractMessage(String rawMessage) {
-        String clean = rawMessage
-                .replaceAll("§[0-9a-fk-orA-FK-OR]", "")
-                .trim();
+        String clean = rawMessage.replaceAll("§[0-9a-fk-orA-FK-OR]", "").trim();
         int colon = clean.indexOf(':');
         if (colon >= 0 && colon < clean.length() - 1) {
             return clean.substring(colon + 1).trim();

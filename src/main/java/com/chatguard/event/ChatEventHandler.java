@@ -8,8 +8,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.*;
 
-import java.util.*;
-
 public class ChatEventHandler {
 
     public static void register() {
@@ -22,64 +20,84 @@ public class ChatEventHandler {
     private static void handleChatMessage(Text message) {
         String raw = message.getString();
 
-        // Ищем триггер во всём сообщении (парсер сам найдёт часть после двоеточия)
         ChatGuardConfig.Trigger trigger = ChatParser.findTrigger(raw);
         if (trigger == null) return;
 
         String nick = ChatParser.extractNick(raw);
         if (nick == null || nick.isEmpty()) return;
 
+        String msgText = ChatParser.extractMessage(raw);
+
         ChatGuardConfig cfg = ChatGuardConfig.getInstance();
 
-        // Формируем команду мута
+        // Команда мута
         String cmd = cfg.muteCommand
                 .replace("{nick}",   nick)
                 .replace("{time}",   trigger.time)
                 .replace("{reason}", trigger.reason);
 
-        // Формируем текст оповещения
-        String alertText = cfg.violationFormat
-                .replace("{nick}", nick)
-                .replace("{word}", trigger.word)
-                .replace("{time}", trigger.time)
-                .replace("{reason}", trigger.reason);
+        // Время мута в часах для отображения
+        String mutTime = trigger.time;
 
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null) {
-            // Кликабельное сообщение в чат
-            Text clickable = buildClickableAlert(alertText, cmd);
-            mc.inGameHud.getChatHud().addMessage(clickable);
+            // Строим красивое уведомление как на скриншоте
+            Text alert = buildAlert(nick, trigger, msgText, cmd, mutTime);
+            mc.inGameHud.getChatHud().addMessage(alert);
 
-            // Звук
             if (cfg.soundEnabled) {
-                mc.player.playSound(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP,
-                        cfg.soundVolume, 0.8f);
+                mc.player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_PLING.value(),
+                        cfg.soundVolume, 1.2f);
             }
         }
 
-        // HUD оверлей
         ViolationOverlay.addAlert(nick, trigger.word, trigger);
     }
 
-    private static Text buildClickableAlert(String alertText, String cmd) {
-        MutableText sep = Text.literal("§8§m────────────────────────────────§r").copy();
+    private static Text buildAlert(String nick, ChatGuardConfig.Trigger trigger,
+                                    String msgText, String cmd, String mutTime) {
+        // Точный формат как на скриншоте:
+        // ─────────────────────────────────
+        // [МОДЕРАЦИЯ] ⚠ Нарушение обнаружено!
+        // Игрок: NickName | Причина: ... | Рек. мут: Xч
+        // Сообщение: "слово"
+        // Детали: Слово: "слово"
+        // Команда: /mute Nick 180m Причина
+        // ─────────────────────────────────
 
-        MutableText alert = Text.literal(alertText).copy();
-        alert.setStyle(Style.EMPTY
+        String sep = "§8§m─────────────────────────────────§r";
+        String word = trigger.word;
+
+        MutableText line1 = Text.literal(sep);
+
+        MutableText line2 = Text.literal("§c[МОДЕРАЦИЯ] §e⚠ §fНарушение обнаружено!");
+
+        MutableText line3 = Text.literal(
+                "§7Игрок: §f" + nick +
+                " §8| §7Причина: §f" + trigger.reason +
+                " §8| §7Рек. мут: §f" + mutTime);
+
+        MutableText line4 = Text.literal("§7Сообщение: §f\"" + msgText + "\"");
+
+        MutableText line5 = Text.literal("§7Детали: Слово: §f\"" + word + "\"");
+
+        // Строка команды — кликабельная
+        MutableText cmdText = Text.literal("§7Команда: §a" + cmd);
+        cmdText.setStyle(Style.EMPTY
                 .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, cmd))
                 .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                        Text.literal("§7Нажмите для команды мута:\n§f" + cmd))));
+                        Text.literal("§aНажмите чтобы вставить команду в чат"))));
 
-        MutableText hint = Text.literal("  §8▶ Нажмите чтобы замутить").copy();
-        hint.setStyle(Style.EMPTY
-                .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, cmd))
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                        Text.literal("§f" + cmd))));
+        MutableText line6 = cmdText;
+        MutableText line7 = Text.literal(sep);
 
         return Text.empty()
-                .append(sep).append("\n")
-                .append(alert).append("\n")
-                .append(hint).append("\n")
-                .append(sep);
+                .append(line1).append("\n")
+                .append(line2).append("\n")
+                .append(line3).append("\n")
+                .append(line4).append("\n")
+                .append(line5).append("\n")
+                .append(line6).append("\n")
+                .append(line7);
     }
 }
