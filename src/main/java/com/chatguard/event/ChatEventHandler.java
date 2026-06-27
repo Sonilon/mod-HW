@@ -5,7 +5,6 @@ import com.chatguard.gui.ViolationOverlay;
 import com.chatguard.util.ChatParser;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.*;
 
@@ -13,56 +12,42 @@ import java.util.*;
 
 public class ChatEventHandler {
 
-    // Хранит последние нарушения: ник → (триггер, команда)
-    // для обработки клика по сообщению
-    public static final Map<String, PendingAction> pendingActions = new LinkedHashMap<>() {
-        @Override protected boolean removeEldestEntry(Map.Entry<String, PendingAction> eldest) {
-            return size() > 50;
-        }
-    };
-
     public static void register() {
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
-            if (overlay) return; // игнорируем action bar
+            if (overlay) return;
             handleChatMessage(message);
         });
     }
 
     private static void handleChatMessage(Text message) {
         String raw = message.getString();
-        String msgText = ChatParser.extractMessage(raw);
 
-        ChatGuardConfig.Trigger trigger = ChatParser.findTrigger(msgText);
+        // Ищем триггер во всём сообщении (парсер сам найдёт часть после двоеточия)
+        ChatGuardConfig.Trigger trigger = ChatParser.findTrigger(raw);
         if (trigger == null) return;
 
         String nick = ChatParser.extractNick(raw);
         if (nick == null || nick.isEmpty()) return;
 
-        // Нашли нарушителя!
         ChatGuardConfig cfg = ChatGuardConfig.getInstance();
 
         // Формируем команду мута
         String cmd = cfg.muteCommand
                 .replace("{nick}",   nick)
                 .replace("{time}",   trigger.time)
-                .replace("{reason}", trigger.reason + " (п." + trigger.rule + ")");
-
-        String actionKey = nick + "_" + System.currentTimeMillis();
-
-        // Строим кликабельное сообщение-оповещение в чат
-        String alertText = cfg.violationFormat
-                .replace("{nick}",   nick)
-                .replace("{word}",   trigger.word)
-                .replace("{rule}",   trigger.rule)
-                .replace("{time}",   trigger.time)
                 .replace("{reason}", trigger.reason);
 
-        // Создаём кликабельный текст
-        Text clickable = buildClickableAlert(alertText, cmd, nick, trigger);
+        // Формируем текст оповещения
+        String alertText = cfg.violationFormat
+                .replace("{nick}", nick)
+                .replace("{word}", trigger.word)
+                .replace("{time}", trigger.time)
+                .replace("{reason}", trigger.reason);
 
-        // Отправляем в чат как системное сообщение клиенту
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null) {
+            // Кликабельное сообщение в чат
+            Text clickable = buildClickableAlert(alertText, cmd);
             mc.inGameHud.getChatHud().addMessage(clickable);
 
             // Звук
@@ -72,49 +57,29 @@ public class ChatEventHandler {
             }
         }
 
-        // Показать оверлей
+        // HUD оверлей
         ViolationOverlay.addAlert(nick, trigger.word, trigger);
-
-        // Сохранить для клика
-        pendingActions.put(actionKey, new PendingAction(nick, cmd));
     }
 
-    private static Text buildClickableAlert(String alertText, String cmd,
-                                             String nick, ChatGuardConfig.Trigger trigger) {
-        // Префикс-разделитель
-        MutableText separator = Text.literal("§8§m                                        §r").copy();
+    private static Text buildClickableAlert(String alertText, String cmd) {
+        MutableText sep = Text.literal("§8§m────────────────────────────────§r").copy();
 
-        // Основное сообщение с кликом
         MutableText alert = Text.literal(alertText).copy();
         alert.setStyle(Style.EMPTY
-                .withColor(net.minecraft.util.Formatting.RED)
                 .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, cmd))
                 .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                        Text.literal("§7Нажмите, чтобы открыть команду мута:\n§f" + cmd)))
-                .withBold(false));
+                        Text.literal("§7Нажмите для команды мута:\n§f" + cmd))));
 
-        // Подсказка под оповещением
-        MutableText hint = Text.literal(
-                "  §8[Нажмите чтобы открыть команду мута]").copy();
+        MutableText hint = Text.literal("  §8▶ Нажмите чтобы замутить").copy();
         hint.setStyle(Style.EMPTY
                 .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, cmd))
                 .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
                         Text.literal("§f" + cmd))));
 
         return Text.empty()
-                .append(separator).append("\n")
+                .append(sep).append("\n")
                 .append(alert).append("\n")
                 .append(hint).append("\n")
-                .append(separator);
-    }
-
-    public static class PendingAction {
-        public final String nick;
-        public final String command;
-
-        public PendingAction(String nick, String command) {
-            this.nick    = nick;
-            this.command = command;
-        }
+                .append(sep);
     }
 }

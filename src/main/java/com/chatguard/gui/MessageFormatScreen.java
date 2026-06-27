@@ -61,7 +61,7 @@ public class MessageFormatScreen extends Screen {
                 Text.literal("§7Префикс (строка над оповещением):"),
                 width / 2, 57, 0xFF90A4AE);
         ctx.drawCenteredTextWithShadow(textRenderer,
-                Text.literal("§7Формат — §e{nick} {word} {rule} {time} {reason}"),
+                Text.literal("§7Формат — §e{nick} {word} {time} {reason}"),
                 width / 2, 97, 0xFF90A4AE);
 
         ctx.fill(0, height - 2, width, height, 0xFF00E676);
