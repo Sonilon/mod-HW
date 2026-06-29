@@ -1,46 +1,52 @@
 package com.chatguard.client;
 
-import com.chatguard.util.LogTailer;
-import com.chatguard.util.ChatParser;
-import com.chatguard.event.ChatBuffer;
-import com.chatguard.event.TriggerEngine;
+import com.chatguard.config.ChatGuardConfig;
+import com.chatguard.event.ChatEventHandler;
+import com.chatguard.gui.ChatGuardSettingsScreen;
+import com.chatguard.gui.ViolationOverlay;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
-
-import java.io.File;
+import net.minecraft.client.util.InputUtil;
+import org.lwjgl.glfw.GLFW;
 
 public class ChatGuardClient implements ClientModInitializer {
 
-    public static TriggerEngine engine;
-    public static LogTailer logTailer;
+    private boolean rightShiftWasDown = false;
 
     @Override
     public void onInitializeClient() {
+        // Загружаем конфиг
+        ChatGuardConfig.load();
 
-        engine = new TriggerEngine();
-        engine.load(DefaultConfig.load()); // из config
+        // Регистрируем обработчик чата
+        ChatEventHandler.register();
 
-        File log = new File(MinecraftClient.getInstance().runDirectory, "logs/latest.log");
-        logTailer = new LogTailer(log);
-
+        // Правый Shift → открыть настройки
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (client.player == null) return;
+            long win = client.getWindow().getHandle();
+            boolean rightShiftDown = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_RIGHT_SHIFT);
 
-            if (client.world == null) return;
-
-            // 1. LOG (AHK SYSTEM)
-            for (String line : logTailer.poll()) {
-                var chat = ChatParser.parse(line);
-                if (chat != null) {
-                    engine.process(chat.author, chat.message);
+            if (rightShiftDown && !rightShiftWasDown) {
+                // Не открываем, если уже открыт экран настроек
+                if (client.currentScreen == null) {
+                    client.setScreen(new ChatGuardSettingsScreen(null));
                 }
             }
-
-            // 2. EVENT BUFFER (LabyMod fix)
-            while (!ChatBuffer.queue.isEmpty()) {
-                var chat = ChatBuffer.queue.poll();
-                engine.process(chat.author, chat.message);
-            }
+            rightShiftWasDown = rightShiftDown;
         });
+
+        // HUD — рендер оверлея с нарушителями
+        HudRenderCallback.EVENT.register((ctx, tickDelta) -> {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc.currentScreen != null) return; // не показывать поверх экранов
+            if (mc.player == null) return;
+            ViolationOverlay.render(ctx, mc.getWindow().getScaledWidth(),
+                    mc.getWindow().getScaledHeight(), tickDelta);
+        });
+
+        System.out.println("[ChatGuard] Мод загружен! Правый Shift = настройки.");
     }
 }

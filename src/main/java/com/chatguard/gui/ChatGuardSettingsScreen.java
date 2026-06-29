@@ -3,39 +3,27 @@ package com.chatguard.gui;
 import com.chatguard.config.ChatGuardConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.*;
+import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 
 public class ChatGuardSettingsScreen extends Screen {
 
     private final Screen parent;
-    private static final int BG_COLOR     = 0xE0101820;
-    private static final int HEADER_COLOR = 0xFF1A2A3A;
-    private static final int ACCENT       = 0xFF00E676;
-    private static final int ACCENT2      = 0xFFFFD740;
-    private static final int TEXT_COLOR   = 0xFFE0E0E0;
-    private static final int DIM_TEXT     = 0xFF90A4AE;
 
     public ChatGuardSettingsScreen(Screen parent) {
-        super(Text.literal("§a§lChatGuard §r§7— Настройки"));
+        super(Text.literal("ChatGuard — Настройки"));
         this.parent = parent;
     }
 
     @Override
     protected void init() {
-        int cx = width / 2;
-        int by = 60;
-        int bw = 200;
-        int bh = 20;
-        int gap = 26;
+        int cx = width/2, bw = 210, bh = 20, top = 60, gap = 26;
 
-        // Кнопка — Триггеры
         addDrawableChild(ButtonWidget.builder(
-                Text.literal("§e⚡ Управление триггерами"),
+                Text.literal("§e⚡ Категории нарушений"),
                 btn -> client.setScreen(new TriggerListScreen(this))
-        ).dimensions(cx - bw / 2, by, bw, bh).build());
+        ).dimensions(cx - bw/2, top, bw, bh).build());
 
-        // Кнопка — Звук вкл/выкл
         addDrawableChild(ButtonWidget.builder(
                 soundLabel(),
                 btn -> {
@@ -43,62 +31,39 @@ public class ChatGuardSettingsScreen extends Screen {
                     ChatGuardConfig.save();
                     btn.setMessage(soundLabel());
                 }
-        ).dimensions(cx - bw / 2, by + gap, bw, bh).build());
+        ).dimensions(cx - bw/2, top + gap, bw, bh).build());
 
-        // Кнопка — Формат команды мута
         addDrawableChild(ButtonWidget.builder(
                 Text.literal("§b✎ Формат команды мута"),
                 btn -> client.setScreen(new MuteFormatScreen(this))
-        ).dimensions(cx - bw / 2, by + gap * 2, bw, bh).build());
+        ).dimensions(cx - bw/2, top + gap*2, bw, bh).build());
 
-        // Кнопка — Формат сообщений
-        addDrawableChild(ButtonWidget.builder(
-                Text.literal("§d✎ Формат сообщений"),
-                btn -> client.setScreen(new MessageFormatScreen(this))
-        ).dimensions(cx - bw / 2, by + gap * 3, bw, bh).build());
-
-        // Кнопка — Регекс ника
-        addDrawableChild(ButtonWidget.builder(
-                Text.literal("§7⚙ Паттерн ника (regex)"),
-                btn -> client.setScreen(new NickRegexScreen(this))
-        ).dimensions(cx - bw / 2, by + gap * 4, bw, bh).build());
-
-        // Закрыть
         addDrawableChild(ButtonWidget.builder(
                 Text.literal("§c✖ Закрыть"),
                 btn -> client.setScreen(parent)
-        ).dimensions(cx - 50, by + gap * 5 + 10, 100, bh).build());
+        ).dimensions(cx - 50, top + gap*3 + 10, 100, bh).build());
     }
 
     private Text soundLabel() {
-        boolean on = ChatGuardConfig.getInstance().soundEnabled;
-        return Text.literal(on ? "§a🔊 Звук: ВКЛ" : "§7🔇 Звук: ВЫКЛ");
+        return ChatGuardConfig.getInstance().soundEnabled
+                ? Text.literal("§a🔊 Звук: ВКЛ")
+                : Text.literal("§7🔇 Звук: ВЫКЛ");
     }
 
     @Override
     public void render(DrawContext ctx, int mx, int my, float delta) {
-        // Фон
-        ctx.fill(0, 0, width, height, BG_COLOR);
-
-        // Верхняя полоска
-        ctx.fill(0, 0, width, 2, ACCENT);
-
-        // Заголовочный блок
-        ctx.fill(0, 5, width, 45, HEADER_COLOR);
-        ctx.fill(0, 5, 4, 45, ACCENT);
-
-        // Заголовок
+        ctx.fill(0, 0, width, height, 0xE0101820);
+        ctx.fill(0, 0, width, 2, 0xFF00E676);
+        ctx.fill(0, 5, width, 45, 0xFF1A2A3A);
+        ctx.fill(0, 5, 4, 45, 0xFF00E676);
         ctx.drawCenteredTextWithShadow(textRenderer,
-                Text.literal("§a§lChat§f§lGuard"), width / 2, 14, 0xFFFFFFFF);
+                Text.literal("§a§lChat§f§lGuard"), width/2, 13, 0xFFFFFFFF);
         ctx.drawCenteredTextWithShadow(textRenderer,
-                Text.literal("§7Помощник модератора"), width / 2, 27, DIM_TEXT);
-
-        // Нижняя полоска
-        ctx.fill(0, height - 2, width, height, ACCENT);
-
+                Text.literal("§7Помощник модератора  §8|  §7[Right Shift] = открыть"),
+                width/2, 27, 0xFF90A4AE);
+        ctx.fill(0, height-2, width, height, 0xFF00E676);
         super.render(ctx, mx, my, delta);
     }
 
-    @Override
-    public boolean shouldPause() { return false; }
+    @Override public boolean shouldPause() { return false; }
 }

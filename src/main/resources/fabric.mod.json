@@ -9,10 +9,9 @@
   "license": "MIT",
   "environment": "client",
   "entrypoints": {
-  "client": [
-    "com.chatguard.client.ChatGuardClient"
-  ]
-}
+    "client": [
+      "com.chatguard.client.ChatGuardClient"
+    ]
   },
   "mixins": [
     "chatguard.mixins.json"
